@@ -38,6 +38,9 @@
 
             <flux:spacer />
 
+            <!-- Stream Toggle -->
+            <livewire:control.stream-toggle />
+
             <flux:separator vertical variant="subtle" class="my-4 mx-3"/>
 
             <flux:dropdown position="top" align="end">

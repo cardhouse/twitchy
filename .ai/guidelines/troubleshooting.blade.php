@@ -3,10 +3,10 @@
 ## Common Issues
 
 **Toasts not appearing on overlay:**
-- Verify overlay key matches `.env` setting
+- Verify overlay key matches `.env` setting (`OVERLAY_KEY`)
 - Check browser console for JavaScript errors
-- Test `/overlay/local/pending-toasts` endpoint
 - Ensure Reverb is running: `php artisan reverb:start`
+- Verify the message was promoted via the control panel
 
 **Reverb connection issues:**
 - Check `BROADCAST_CONNECTION=reverb` in `.env`
@@ -20,6 +20,11 @@
 - Check network connectivity
 - Review logs: `storage/logs/laravel.log`
 
+**Messages not appearing in control panel:**
+- Ensure the IRC relay is running: `php artisan twitch:relay --channel=yourchannel`
+- Check if stream is paused (use the toggle in control panel)
+- Verify Echo is connected in browser console
+
 **Performance issues:**
 - Monitor message throughput
 - Consider message rate limiting
@@ -29,10 +34,7 @@
 ## Debug Commands
 
 ```bash
-# Check overlay events
-curl http://your-domain.test/overlay/local/pending-toasts
-
-# Test broadcast
+# Test broadcast manually
 php artisan tinker
 >>> broadcast(new App\Events\MessageReceived($message));
 
@@ -55,7 +57,7 @@ php artisan twitch:relay --channel=yourchannel --dry-run
 Open browser console on overlay page to check:
 - WebSocket connection status
 - JavaScript errors
-- Reverb event reception
+- Echo/Reverb event reception
 - Toast rendering issues
 
 ## External Tools

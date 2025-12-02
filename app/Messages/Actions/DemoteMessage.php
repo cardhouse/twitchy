@@ -15,6 +15,6 @@ readonly class DemoteMessage
         $this->messageStore->remove($messageId);
 
         // Broadcast the message demoted event
-        MessageDemoted::dispatch();
+        MessageDemoted::dispatch($messageId);
     }
 }

@@ -1,33 +1,23 @@
 # Key Patterns & Best Practices
 
-## Service Layer: OverlayService
+## Action Pattern
 
-The `OverlayService` is the primary interface for overlay operations:
+Use action classes for discrete message operations:
 
 ```php
-use App\Services\OverlayService;
+use App\Messages\Actions\PromoteMessage;
+use App\Models\Message;
 
-// Basic usage
-$overlay = new OverlayService('local');
+// Promote a message to overlay
+$action = app(PromoteMessage::class);
+$action->handle($message);
 
-// Show chat message
-$overlay->showChatMessage(
-    displayName: 'Username',
-    message: 'Hello World!',
-    username: 'username',
-    badges: [['name' => 'moderator']],
-    options: ['theme' => 'dark', 'duration_ms' => 8000]
-);
+// Demote a message from overlay
+$action = app(\App\Messages\Actions\DemoteMessage::class);
+$action->handle($messageId);
 
-// Show notification
-$overlay->showNotification(
-    title: 'Alert!',
-    message: 'Something happened!',
-    options: ['duration_ms' => 12000]
-);
-
-// Switch overlay
-$overlay->forOverlay('stream2')->showNotification('Title', 'Message');
+// Clear all messages
+app(\App\Messages\Actions\ClearMessages::class)->handle();
 ```
 
 ## Message Store Pattern
@@ -40,7 +30,7 @@ use App\Messages\Stores\ChatMessageStore;
 $store = new ChatMessageStore('local');
 
 // Store message
-$store->store($messageData);
+$store->push($messageData);
 
 // List recent messages
 $messages = $store->list(limit: 100);
@@ -49,34 +39,53 @@ $messages = $store->list(limit: 100);
 $store->clear();
 ```
 
-## Action Pattern
+## Event-Driven Architecture
 
-Use action classes for discrete operations:
+Events and listeners handle side effects:
 
 ```php
-use App\Messages\Actions\PromoteMessage;
+// Dispatching events (done automatically by Actions)
+MessagePromoted::dispatch($message);
+MessageDemoted::dispatch($messageId);
+MessageReceived::dispatch($message);
 
-// Promote a message to overlay
-$action = new PromoteMessage();
-$action->execute($messageId, $options);
+// Listeners handle the side effects
+// MessagePromotedListener - handles post-promotion logic
+// MessageDemotedListener - handles post-demotion logic
 ```
 
 ## Livewire Component Conventions
 
 - **Prefer Volt**: Use Volt single-file components for new components when possible
-- **Real-time Updates**: Subscribe to Reverb channels in component lifecycle
+- **Real-time Updates**: Subscribe to Reverb channels using Echo in component lifecycle
 - **State Management**: Keep state server-side, UI reflects it
 - **Loading States**: Use `wire:loading` for better UX
 
 ```blade
-{{-- Example Livewire component pattern --}}
-<div wire:poll.2s="checkForUpdates">
+@verbatim
+{{-- Example Livewire component pattern with Echo --}}
+<?php
+use Livewire\Attributes\On;
+
+new class extends Component {
+    public Collection $messages;
+
+    #[On('echo:local,MessageReceived')]
+    public function addMessage($event): void
+    {
+        $this->messages->push($event['message']);
+    }
+}
+?>
+
+<div>
     @foreach ($messages as $message)
-        <div wire:key="msg-{{ $message->id }}">
-            {{-- Message content --}}
+        <div wire:key="msg-{{ $message['id'] }}">
+            {{ $message['message'] }}
         </div>
     @endforeach
 </div>
+@endverbatim
 ```
 
 ## Important Notes for AI Assistants

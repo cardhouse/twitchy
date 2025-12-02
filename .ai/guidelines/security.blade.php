@@ -19,19 +19,6 @@ public function show(Request $request, string $key): Response
 }
 ```
 
-## Webhook Security
-
-- CSRF protection disabled for webhook routes (external APIs)
-- Consider adding API key authentication for production
-- Validate all incoming webhook data
-- Rate limit webhook endpoints
-
-**Disable CSRF for webhooks:**
-```php
-Route::post('/hooks/chat-message', [ChatHookController::class, 'handleChatMessage'])
-    ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
-```
-
 ## Production Hardening
 
 - Use HTTPS in production
@@ -43,14 +30,14 @@ Route::post('/hooks/chat-message', [ChatHookController::class, 'handleChatMessag
 **Rate limiting example:**
 ```php
 Route::middleware('throttle:60,1')->group(function () {
-    Route::post('/hooks/chat-message', ...);
+    Route::get('/control', ...);
 });
 ```
 
 ## Important Security Notes
 
 - Overlay keys provide **basic protection only**, not true security
-- In production, consider adding API authentication for webhooks
 - Monitor logs for suspicious activity
 - Keep dependencies updated
 - Use strong, unique overlay keys per environment
+- The IRC relay connects to Twitch using OAuth tokens - keep these secure

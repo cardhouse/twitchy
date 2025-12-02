@@ -13,9 +13,9 @@
 - URL: `/control`
 - Live chat feed streaming from configured Twitch channel
 - Search/filter capabilities
-- "Activate" button to promote message to overlay
-- "Clear" button to remove current toast
-- Real-time preview of current overlay state
+- Click on message to promote it to overlay
+- "Clear Messages" button to clear all messages
+- Stream toggle to pause/resume the IRC relay
 
 ## Data Flow Architecture
 
@@ -27,8 +27,8 @@
 
 ## Real-time Channels
 
-- `chat.messages` (public): Control Panel subscribes to receive new chat messages
-- `overlay.{key}` (public): Overlay subscribes to receive toast show/hide events
+- `local` (public): Control Panel subscribes via Echo to receive MessageReceived events
+- `overlay.{key}` (public): Overlay subscribes to receive toast show/hide events (MessagePromoted, MessageDemoted)
 - Message flow: IRC → Store → Broadcast → UI components
 
 ## Key Conventions
@@ -39,14 +39,18 @@
 - Processor pattern for parsing external message formats: `TwitchMessageProcessor`
 - Message types inherit from base `Message` model
 
+**Event-Driven Architecture**
+- Events: `MessageReceived`, `MessagePromoted`, `MessageDemoted`
+- Listeners handle side effects: `MessagePromotedListener`, `MessageDemotedListener`
+- Events implement `ShouldBroadcast` for real-time updates
+
 **Cache-Based State Management**
 - Messages stored in cache with overlay-specific keys
-- 30-second TTL for automatic cleanup
-- Use `cache()->pull()` for single-consumption events
-- Polling interval: 2 seconds for real-time feel
+- Automatic cleanup via TTL
+- Polling interval: 2 seconds for real-time feel via `wire:poll`
 
 **Events & Broadcasting**
 - All events implement `ShouldBroadcast`
 - Event naming: `MessageReceived`, `MessagePromoted`, `MessageDemoted`
-- Channel naming: `chat.messages`, `overlay.{key}`
+- Channel naming: `local`, `overlay.{key}`
 - Always include necessary payload data in event properties

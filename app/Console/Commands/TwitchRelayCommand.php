@@ -13,6 +13,7 @@ use App\Models\Messages\PrivateMessage;
 use App\Models\Messages\UnknownMessage;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Stringable;
 use Throwable;
 
@@ -57,6 +58,13 @@ class TwitchRelayCommand extends Command
     {
         $this->line("<{$message->displayName}> {$message->content}");
 
+        // Check if stream is paused
+        // if ($chatroom->isPaused()) {
+        // $this->line("[PAUSED] Skipping message creation for: {$message->content}");
+
+        // return;
+        // }
+
         $chatMessage = new Message([
             'username' => $message->username,
             'display_name' => $message->displayName,
@@ -88,6 +96,14 @@ class TwitchRelayCommand extends Command
 
         $this->socket = $socket;
         stream_set_timeout($this->socket, 10);
+
+        // Log the relay start
+        Log::info('Twitch relay started', [
+            'channel' => $channel,
+            'host' => $host,
+            'port' => $port,
+            'timestamp' => now()->toISOString(),
+        ]);
 
         // Request tags & membership for badges/display names
         $this->send('CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership');

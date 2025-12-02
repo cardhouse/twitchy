@@ -4,8 +4,6 @@
 
 ```
 app/
-├── Actions/                    # Single-responsibility action classes
-│   └── ClearChannel.php
 ├── Console/Commands/           # Artisan commands (auto-registered)
 │   ├── TwitchRelayCommand.php  # IRC connection to Twitch
 │   └── TwitchyRunCommand.php   # Main orchestration command
@@ -14,9 +12,10 @@ app/
 │   ├── MessagePromoted.php
 │   └── MessageDemoted.php
 ├── Http/Controllers/
-│   ├── ChatHookController.php  # Webhook endpoints for external integration
-│   ├── OverlayController.php   # Overlay display and API
-│   └── NewChatRequest.php      # Form request for validation
+│   └── OverlayController.php   # Overlay display
+├── Listeners/                  # Event listeners
+│   ├── MessageDemotedListener.php
+│   └── MessagePromotedListener.php
 ├── Livewire/                   # Livewire components
 │   └── Overlay/
 │       └── ToastDisplay.php    # Main overlay toast component
@@ -43,18 +42,21 @@ app/
 │       ├── PingMessage.php
 │       ├── PrivateMessage.php
 │       └── UnknownMessage.php
-└── Services/
-    └── OverlayService.php      # Core overlay management service
+└── Providers/
+    ├── AppServiceProvider.php
+    ├── EventServiceProvider.php
+    └── VoltServiceProvider.php
 
 resources/views/
 ├── control/                    # Control panel views
 │   └── index.blade.php
 ├── layouts/                    # Layout files
-│   ├── app.blade.php
+│   ├── control.blade.php       # Control panel layout
 │   └── overlay.blade.php       # Transparent layout for OBS
 ├── livewire/                   # Livewire component views
 │   ├── control/
 │   │   ├── chat-feed.blade.php
+│   │   ├── stream-toggle.blade.php
 │   │   └── toast-preview.blade.php
 │   └── overlay/
 │       └── toast-display.blade.php

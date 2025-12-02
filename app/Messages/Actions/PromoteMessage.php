@@ -5,7 +5,6 @@ namespace App\Messages\Actions;
 use App\Events\MessagePromoted;
 use App\Messages\Stores\PromotedMessageStore;
 use App\Models\Message;
-use App\Services\OverlayService;
 
 class PromoteMessage
 {

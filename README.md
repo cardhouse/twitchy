@@ -4,17 +4,18 @@ A Laravel-based real-time overlay system for streamers to display chat messages,
 
 ## Overview
 
-Twitchy provides a clean, customizable overlay system that displays chat messages and notifications as toasts on your stream. It uses a direct Livewire approach with cache-based polling for reliable, real-time updates without the complexity of WebSocket connections.
+Twitchy provides a clean, customizable overlay system that displays chat messages and notifications as toasts on your stream. It uses Laravel Reverb WebSockets for real-time updates with a control panel for managing promoted messages.
 
 ## Features
 
 - 🎨 **Customizable Toasts**: Display chat messages with user badges, themes, and animations
-- 🔄 **Real-time Updates**: Automatic polling system for live updates
-- 🎮 **Multi-Platform Support**: Compatible with Twitch, Discord, YouTube, IRC, and more
-- 🎯 **Simple API**: Easy-to-use REST endpoints for external integrations
+- 🔄 **Real-time Updates**: Laravel Reverb WebSockets for instant updates
+- 🎮 **IRC Integration**: Built-in Twitch IRC relay for automatic chat message capture
+- 🎯 **Control Panel**: Web interface for managing and promoting chat messages
 - 🎨 **Theme Support**: Dark and light themes with customizable styling
 - 📱 **Responsive Design**: Works on various screen sizes and resolutions
 - ⚡ **Performance**: Lightweight with minimal overhead
+- ⌨️ **Typing Animation**: Realistic typing effect for message display
 
 ## Installation
 
@@ -64,7 +65,17 @@ Twitchy provides a clean, customizable overlay system that displays chat message
 
 ## Usage
 
-### Basic Overlay Setup
+### Control Panel
+
+1. **Access the control panel** at: `http://your-domain.test/control`
+2. **Start the IRC relay** to capture chat messages:
+   ```bash
+   php artisan twitch:relay --channel=yourchannel
+   ```
+3. **Promote messages** by clicking on them in the chat feed
+4. **Manage promoted messages** using the toast preview panel
+
+### Overlay Setup
 
 1. **Access your overlay** at: `http://your-domain.test/overlay/local`
 2. **Add as Browser Source** in OBS/Streamlabs with these settings:
@@ -73,159 +84,72 @@ Twitchy provides a clean, customizable overlay system that displays chat message
    - Height: 1080
    - Custom CSS (optional): Transparent background
 
-### URL Parameters
+### IRC Relay Commands
 
-Customize the overlay appearance with URL parameters:
-
-```
-http://your-domain.test/overlay/local?theme=dark&fontScale=1.2&safeMargin=50
-```
-
-**Available Parameters:**
-- `theme`: `dark` or `light` (default: dark)
-- `fontScale`: 0.5 to 3.0 (default: 1.0)
-- `animation`: `slide-up`, `slide-down`, `slide-left`, `slide-right`, `fade`, `zoom` (default: slide-up)
-- `safeMargin`: 0 to 100 pixels (default: 24)
-
-## API Endpoints
-
-### Chat Messages
-
-**Endpoint:** `POST /hooks/chat-message`
-
-Display chat messages on the overlay.
-
+**Start IRC relay for a specific channel:**
 ```bash
-curl -X POST http://your-domain.test/hooks/chat-message \
-  -H "Content-Type: application/json" \
-  -d '{
-    "display_name": "StreamerFan123",
-    "username": "streamerfan123",
-    "message": "Hello from chat! 👋",
-    "badges": [
-      {"name": "subscriber"},
-      {"name": "vip"}
-    ],
-    "platform": "twitch",
-    "overlay_key": "local"
-  }'
+php artisan twitch:relay --channel=yourchannel
 ```
 
-**Required Fields:**
-- `display_name`: Display name of the user
-- `message`: The chat message content
-
-**Optional Fields:**
-- `username`: Username (defaults to lowercase display_name)
-- `badges`: Array of badge objects with `name` field
-- `platform`: `twitch`, `discord`, `youtube`, `irc` (affects styling)
-- `overlay_key`: Target overlay (defaults to configured key)
-
-### Notifications
-
-**Endpoint:** `POST /hooks/notification`
-
-Display system notifications (follows, subscriptions, donations, etc.).
-
+**Run the full stack (IRC relay + frontend dev server):**
 ```bash
-curl -X POST http://your-domain.test/hooks/notification \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "follow",
-    "title": "New Follower!",
-    "message": "StreamerFan123 just followed! 🎉",
-    "duration_ms": 10000,
-    "overlay_key": "local"
-  }'
+php artisan twitchy:run --channel=yourchannel
 ```
 
-**Required Fields:**
-- `type`: `follow`, `subscribe`, `donation`, `raid`, `host`
-- `title`: Notification title
-- `message`: Notification message
+**Available options:**
+- `--channel=channelname`: Twitch channel to connect to
+- `--dry-run`: Test mode without saving messages
+- `--no-frontend`: Skip frontend dev server
+- `--no-relay`: Skip IRC relay
 
-**Optional Fields:**
-- `overlay_key`: Target overlay (defaults to configured key)
-- `duration_ms`: Display duration (3000-15000ms, default: 10000)
+## Configuration
 
-### Direct Toast API
+### Environment Variables
 
-**Endpoint:** `POST /overlay/{key}/toast`
+Configure your Twitch credentials in `.env`:
 
-Low-level API for custom toast messages.
+```env
+# Twitch IRC Configuration
+TWITCH_OAUTH=oauth:your_oauth_token
+TWITCH_NICK=your_bot_username
+TWITCH_CHANNEL=your_channel_name
 
-```bash
-curl -X POST http://your-domain.test/overlay/local/toast \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": {
-      "display_name": "CustomUser",
-      "username": "customuser",
-      "badges": [{"name": "custom"}],
-      "message": "Custom toast message!"
-    },
-    "options": {
-      "duration_ms": 8000,
-      "theme": "dark",
-      "fontScale": 1.0,
-      "animation": "slide-up"
-    }
-  }'
+# Overlay Configuration
+OVERLAY_KEY=local
+
+# Reverb Configuration (for real-time updates)
+REVERB_APP_ID=your_app_id
+REVERB_APP_KEY=your_app_key
+REVERB_APP_SECRET=your_app_secret
+REVERB_HOST=localhost
+REVERB_PORT=8080
+REVERB_SCHEME=http
 ```
+
+### Twitch OAuth Setup
+
+1. Go to [Twitch Developer Console](https://dev.twitch.tv/console)
+2. Create a new application
+3. Generate an OAuth token with `chat:read` scope
+4. Add the token to your `.env` file
 
 ## Development
 
-### Using the OverlayService
+### Local Development
 
-For internal application use, inject or create the `OverlayService`:
-
-```php
-use App\Services\OverlayService;
-
-// Basic usage
-$overlay = new OverlayService('local');
-
-// Show chat message
-$overlay->showChatMessage(
-    displayName: 'Username',
-    message: 'Hello World!',
-    username: 'username',
-    badges: [['name' => 'moderator']],
-    options: ['theme' => 'dark', 'duration_ms' => 8000]
-);
-
-// Show notification
-$overlay->showNotification(
-    title: 'Alert!',
-    message: 'Something important happened!',
-    options: ['duration_ms' => 12000]
-);
-
-// Custom toast
-$overlay->showToast(
-    message: [
-        'display_name' => 'System',
-        'username' => 'system',
-        'badges' => [['name' => 'bot']],
-        'message' => 'Custom message'
-    ],
-    options: ['theme' => 'light']
-);
-
-// Multiple overlays
-$overlay->forOverlay('stream2')->showNotification('Title', 'Message');
+**Start the development server:**
+```bash
+php artisan serve
 ```
 
-### Available Options
+**Start IRC relay in another terminal:**
+```bash
+php artisan twitch:relay --channel=yourchannel
+```
 
-```php
-$options = [
-    'duration_ms' => 8000,        // Auto-dismiss time (1000-30000)
-    'theme' => 'dark',            // 'dark' or 'light'
-    'fontScale' => 1.0,           // Font size multiplier (0.5-3.0)
-    'animation' => 'slide-up',    // Animation type
-    'safeMargin' => 24,           // Margin from screen edges (0-100)
-];
+**Or run everything together:**
+```bash
+php artisan twitchy:run --channel=yourchannel
 ```
 
 ### Testing
@@ -233,104 +157,32 @@ $options = [
 Test the overlay system:
 
 1. **View overlay**: `http://your-domain.test/overlay/local`
-2. **Test toast**: `http://your-domain.test/test/toast-show`
-3. **Test page**: `http://your-domain.test/test/livewire-toast`
-
-### Platform Integration Examples
-
-**Twitch Bot (Python)**:
-```python
-import requests
-
-def send_chat_message(display_name, message, badges=None):
-    requests.post('http://your-domain.test/hooks/chat-message', json={
-        'display_name': display_name,
-        'message': message,
-        'badges': badges or [],
-        'platform': 'twitch'
-    })
-```
-
-**Discord Bot (JavaScript)**:
-```javascript
-const axios = require('axios');
-
-async function sendChatMessage(user, message) {
-    await axios.post('http://your-domain.test/hooks/chat-message', {
-        display_name: user.displayName,
-        username: user.username,
-        message: message,
-        platform: 'discord'
-    });
-}
-```
-
-**OBS/Streamlabs Integration**:
-```javascript
-// In your streaming software's script
-fetch('http://your-domain.test/hooks/notification', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-        type: 'follow',
-        title: 'New Follower!',
-        message: `${followerName} just followed!`
-    })
-});
-```
-
-## Configuration
-
-### Overlay Settings
-
-Edit `config/overlay.php`:
-```php
-return [
-    'key' => env('OVERLAY_KEY', 'local'),
-    'default_theme' => 'dark',
-    'cache_ttl' => 30, // seconds
-];
-```
-
-### Multiple Overlays
-
-To support multiple overlays, update your overlay key validation in `OverlayController.php`:
-
-```php
-public function show(Request $request, string $key): Response
-{
-    $allowedKeys = ['local', 'stream1', 'stream2'];
-    
-    if (!in_array($key, $allowedKeys)) {
-        abort(404);
-    }
-    
-    // ... rest of method
-}
-```
+2. **Control panel**: `http://your-domain.test/control`
+3. **Start IRC relay**: `php artisan twitch:relay --channel=yourchannel`
 
 ## Architecture
 
 ### Components
 
-- **OverlayController**: Handles overlay display and API endpoints
-- **ChatHookController**: Processes incoming chat/notification webhooks
-- **OverlayService**: Core service for managing overlay events
-- **ToastDisplay**: Livewire component for rendering toasts
+- **OverlayController**: Handles overlay display
+- **TwitchRelayCommand**: IRC relay for capturing Twitch chat messages
+- **Message Actions**: CreateMessage, PromoteMessage, DemoteMessage for message management
+- **ToastDisplay**: Livewire component for rendering toasts with typing animation
+- **Control Panel**: Web interface for managing promoted messages
 
 ### Data Flow
 
-1. **External Source** → Webhook Endpoint (`/hooks/*`)
-2. **Webhook** → OverlayService → Cache
-3. **Overlay Page** → Polls for events → Displays toast
+1. **Twitch IRC** → TwitchRelayCommand → Creates Message → Broadcasts MessageReceived event via Reverb
+2. **Control Panel** → User promotes message → Broadcasts MessagePromoted event via Reverb
+3. **Overlay** → Listens to Reverb events → Displays toast with typing animation
 4. **Auto-dismiss** → Clears toast after duration
 
-### Cache Strategy
+### Real-time System
 
-- Events stored in cache with overlay-specific keys
-- 30-second TTL for cleanup
-- `cache()->pull()` ensures single consumption
-- 2-second polling interval for real-time feel
+- **Laravel Reverb**: WebSocket server for real-time communication
+- **Events**: MessageReceived, MessagePromoted, MessageDemoted broadcast via Reverb
+- **Livewire**: Real-time UI updates using Reverb WebSocket connections
+- **Typing Animation**: JavaScript-based typing effect for realistic message display
 
 ## Troubleshooting
 
@@ -338,18 +190,20 @@ public function show(Request $request, string $key): Response
 
 **Toasts not appearing:**
 - Check overlay URL and key
-- Verify events are being cached: `curl http://your-domain.test/overlay/local/pending-toasts`
+- Verify Reverb WebSocket connection in browser dev tools
+- Ensure IRC relay is running and connected to Twitch
 - Check browser console for JavaScript errors
 
-**API errors:**
-- Ensure CSRF protection is disabled for webhook routes
-- Validate JSON payload structure
-- Check Laravel logs for detailed errors
+**IRC relay not connecting:**
+- Verify Twitch OAuth token is valid
+- Check channel name is correct
+- Ensure bot has permission to read chat
+- Check Laravel logs for connection errors
 
-**Performance issues:**
-- Reduce polling interval if needed
-- Adjust cache TTL for your use case
-- Monitor server resources during high traffic
+**Real-time updates not working:**
+- Verify Reverb server is running: `php artisan reverb:start`
+- Check WebSocket connection in browser dev tools
+- Ensure events are being broadcast correctly
 
 ### Debug Mode
 
@@ -361,6 +215,11 @@ LOG_LEVEL=debug
 View logs:
 ```bash
 tail -f storage/logs/laravel.log
+```
+
+Test Reverb connection:
+```bash
+php artisan reverb:start --debug
 ```
 
 ## License
