@@ -607,3 +607,566 @@ $pages->assertNoJavascriptErrors()->assertNoConsoleLogs();
 - Every change must be programmatically tested. Write a new test or update an existing test, then run the affected tests to make sure they pass.
 - Run the minimum number of tests needed to ensure code quality and speed. Use `php artisan test` with a specific filename or filter.
 </laravel-boost-guidelines>
+
+=== twitchy project guidelines ===
+
+# Twitchy - Stream Overlay System
+
+## Project Overview
+
+Twitchy is a Laravel-based real-time overlay system for streamers to display chat messages, notifications, and other interactive content on their streams. It provides a clean, customizable overlay system that displays chat messages and notifications as toasts on stream broadcasts.
+
+### Core Purpose
+- Display Twitch chat messages as customizable toasts on stream overlays
+- Provide real-time updates via Laravel Reverb broadcasting
+- Offer a control panel for managing which messages appear on the overlay
+- Support multiple platforms: Twitch, Discord, YouTube, IRC
+
+### Key Technologies
+- **Backend**: Laravel 12, PHP 8.4+
+- **Real-time**: Laravel Reverb (WebSocket broadcasting)
+- **UI Components**: Livewire 3 + Volt (prefer Volt for single-file components)
+- **UI Library**: Flux Pro UI (full Pro edition access)
+- **Styling**: Tailwind CSS v4
+- **Testing**: Pest v4 (including browser testing capabilities)
+- **Database**: SQLite (development), MySQL/PostgreSQL (production)
+
+## Application Architecture
+
+### Two-Window System
+
+**1. Overlay Page (OBS Browser Source)**
+- URL: `/overlay/{key}` (e.g., `/overlay/local`)
+- Transparent background for OBS integration
+- Displays single toast of selected chat message
+- Supports URL parameters for customization: `?theme=dark&fontScale=1.2&safeMargin=50&animation=slide-up`
+- Auto-dismiss (timed) or persistent (manual clear) modes
+
+**2. Control Panel (Management Interface)**
+- URL: `/control`
+- Live chat feed streaming from configured Twitch channel
+- Search/filter capabilities
+- "Activate" button to promote message to overlay
+- "Clear" button to remove current toast
+- Real-time preview of current overlay state
+
+### Data Flow Architecture
+
+```
+[Twitch IRC] → [Artisan Command: twitch:relay] → [Database + Cache] → [Reverb Broadcasting]
+                                                                              ↓
+                                                        [Control Panel] ← → [Overlay Page]
+```
+
+### Real-time Channels
+
+- `chat.messages` (public): Control Panel subscribes to receive new chat messages
+- `overlay.{key}` (public): Overlay subscribes to receive toast show/hide events
+- Message flow: IRC → Store → Broadcast → UI components
+
+## Directory Structure & Conventions
+
+### Application Structure
+
+```
+app/
+├── Actions/                    # Single-responsibility action classes
+│   └── ClearChannel.php
+├── Console/Commands/           # Artisan commands (auto-registered)
+│   ├── TwitchRelayCommand.php  # IRC connection to Twitch
+│   └── TwitchyRunCommand.php   # Main orchestration command
+├── Events/                     # Broadcastable events
+│   ├── MessageReceived.php
+│   ├── MessagePromoted.php
+│   └── MessageDemoted.php
+├── Http/Controllers/
+│   ├── ChatHookController.php  # Webhook endpoints for external integration
+│   ├── OverlayController.php   # Overlay display and API
+│   └── NewChatRequest.php      # Form request for validation
+├── Livewire/                   # Livewire components
+│   └── Overlay/
+│       └── ToastDisplay.php    # Main overlay toast component
+├── Messages/                   # Message handling domain
+│   ├── Actions/                # Message-specific actions
+│   │   ├── CreateMessage.php
+│   │   ├── PromoteMessage.php
+│   │   ├── DemoteMessage.php
+│   │   ├── ClearMessages.php
+│   │   └── ClearPromotedMessages.php
+│   ├── Contracts/              # Interfaces
+│   │   └── Store.php
+│   ├── Processors/             # Message processing logic
+│   │   └── TwitchMessageProcessor.php
+│   └── Stores/                 # Data persistence strategies
+│       ├── CacheStore.php
+│       ├── ChatMessageStore.php
+│       └── PromotedMessageStore.php
+├── Models/                     # Eloquent models
+│   ├── Chatroom.php
+│   ├── Message.php             # Base message model
+│   └── Messages/               # Message type hierarchy
+│       ├── ChatMessage.php
+│       ├── PingMessage.php
+│       ├── PrivateMessage.php
+│       └── UnknownMessage.php
+└── Services/
+    └── OverlayService.php      # Core overlay management service
+
+resources/views/
+├── control/                    # Control panel views
+│   └── index.blade.php
+├── layouts/                    # Layout files
+│   ├── app.blade.php
+│   └── overlay.blade.php       # Transparent layout for OBS
+├── livewire/                   # Livewire component views
+│   ├── control/
+│   │   ├── chat-feed.blade.php
+│   │   └── toast-preview.blade.php
+│   └── overlay/
+│       └── toast-display.blade.php
+└── overlay/                    # Overlay-specific views
+    └── show.blade.php
+```
+
+### Key Conventions
+
+**Message Architecture**
+- Use the Action pattern for message operations: `CreateMessage`, `PromoteMessage`, `DemoteMessage`
+- Store pattern for data persistence: `ChatMessageStore`, `PromotedMessageStore`
+- Processor pattern for parsing external message formats: `TwitchMessageProcessor`
+- Message types inherit from base `Message` model
+
+**Cache-Based State Management**
+- Messages stored in cache with overlay-specific keys
+- 30-second TTL for automatic cleanup
+- Use `cache()->pull()` for single-consumption events
+- Polling interval: 2 seconds for real-time feel
+
+**Events & Broadcasting**
+- All events implement `ShouldBroadcast`
+- Event naming: `MessageReceived`, `MessagePromoted`, `MessageDemoted`
+- Channel naming: `chat.messages`, `overlay.{key}`
+- Always include necessary payload data in event properties
+
+## Development Workflows
+
+### Starting Development Environment
+
+```bash
+# Start Reverb WebSocket server
+php artisan reverb:start
+
+# Start Laravel development server
+php artisan serve
+
+# Start Twitch IRC relay (in separate terminal)
+php artisan twitch:relay --channel=yourchannel
+
+# Or use the unified command
+php artisan twitchy:run --channel=yourchannel
+
+# Start frontend build (in separate terminal)
+npm run dev
+
+# Or use composer dev script (runs all in parallel)
+composer run dev
+```
+
+### Configuration Files
+
+**Environment Variables (Critical)**
+```dotenv
+# Overlay Security
+OVERLAY_KEY=local                    # Must match URL path segment
+
+# Reverb Configuration
+BROADCAST_CONNECTION=reverb
+REVERB_APP_ID=chat-overlay
+REVERB_APP_KEY=local-key
+REVERB_APP_SECRET=local-secret
+REVERB_HOST=127.0.0.1
+REVERB_PORT=8080
+
+# Twitch IRC (optional if using IRC relay)
+TWITCH_NICK=your_twitch_username
+TWITCH_OAUTH=oauth:token             # from https://twitchapps.com/tmi/
+TWITCH_CHANNEL=targetchannel
+```
+
+**Configuration Files**
+- `config/overlay.php` - Overlay-specific settings
+- `config/broadcasting.php` - Reverb configuration
+- Standard Laravel config files apply
+
+### Testing Approach
+
+**Test Organization**
+- Feature tests: `tests/Feature/`
+- Unit tests: `tests/Unit/`
+- Browser tests: `tests/Browser/` (Pest v4 browser testing)
+- Follow Pest conventions (use `it()` and `test()` functions)
+
+**Test Coverage Requirements**
+- Write tests for all new features
+- Test message flow: IRC parsing → Storage → Broadcasting → Display
+- Test overlay activation/deactivation
+- Test real-time event handling
+- Browser tests for overlay rendering and animations
+
+**Running Tests**
+```bash
+# Run all tests
+php artisan test
+
+# Run specific test file
+php artisan test tests/Feature/OverlayTest.php
+
+# Run with filter
+php artisan test --filter=message
+
+# Browser testing (if configured)
+php artisan test tests/Browser/
+```
+
+## Key Patterns & Best Practices
+
+### Service Layer: OverlayService
+
+The `OverlayService` is the primary interface for overlay operations:
+
+```php
+use App\Services\OverlayService;
+
+// Basic usage
+$overlay = new OverlayService('local');
+
+// Show chat message
+$overlay->showChatMessage(
+    displayName: 'Username',
+    message: 'Hello World!',
+    username: 'username',
+    badges: [['name' => 'moderator']],
+    options: ['theme' => 'dark', 'duration_ms' => 8000]
+);
+
+// Show notification
+$overlay->showNotification(
+    title: 'Alert!',
+    message: 'Something happened!',
+    options: ['duration_ms' => 12000]
+);
+
+// Switch overlay
+$overlay->forOverlay('stream2')->showNotification('Title', 'Message');
+```
+
+### Message Store Pattern
+
+Always use stores for data persistence:
+
+```php
+use App\Messages\Stores\ChatMessageStore;
+
+$store = new ChatMessageStore('local');
+
+// Store message
+$store->store($messageData);
+
+// List recent messages
+$messages = $store->list(limit: 100);
+
+// Clear all messages
+$store->clear();
+```
+
+### Action Pattern
+
+Use action classes for discrete operations:
+
+```php
+use App\Messages\Actions\PromoteMessage;
+
+// Promote a message to overlay
+$action = new PromoteMessage();
+$action->execute($messageId, $options);
+```
+
+### Livewire Component Conventions
+
+- **Prefer Volt**: Use Volt single-file components for new components when possible
+- **Real-time Updates**: Subscribe to Reverb channels in component lifecycle
+- **State Management**: Keep state server-side, UI reflects it
+- **Loading States**: Use `wire:loading` for better UX
+
+```blade
+{{-- Example Livewire component pattern --}}
+<div wire:poll.2s="checkForUpdates">
+    @foreach ($messages as $message)
+        <div wire:key="msg-{{ $message->id }}">
+            {{-- Message content --}}
+        </div>
+    @endforeach
+</div>
+```
+
+## API Endpoints & Integration
+
+### Webhook Endpoints (External Integration)
+
+**Chat Message Webhook**
+```
+POST /hooks/chat-message
+Content-Type: application/json
+
+{
+  "display_name": "StreamerFan123",
+  "username": "streamerfan123",
+  "message": "Hello! 👋",
+  "badges": [{"name": "subscriber"}, {"name": "vip"}],
+  "platform": "twitch",
+  "overlay_key": "local"
+}
+```
+
+**Notification Webhook**
+```
+POST /hooks/notification
+Content-Type: application/json
+
+{
+  "type": "follow|subscribe|donation|raid|host",
+  "title": "New Follower!",
+  "message": "User just followed!",
+  "duration_ms": 10000,
+  "overlay_key": "local"
+}
+```
+
+### Direct Toast API
+
+```
+POST /overlay/{key}/toast
+Content-Type: application/json
+
+{
+  "message": {
+    "display_name": "Username",
+    "username": "username",
+    "badges": [{"name": "moderator"}],
+    "message": "Toast message"
+  },
+  "options": {
+    "duration_ms": 8000,
+    "theme": "dark",
+    "fontScale": 1.0,
+    "animation": "slide-up",
+    "safeMargin": 24
+  }
+}
+```
+
+## OBS Integration
+
+### Browser Source Setup
+
+1. **Add Browser Source** in OBS
+2. **URL**: `http://your-domain.test/overlay/local?theme=dark&fontScale=1.0`
+3. **Width**: 1920, **Height**: 1080
+4. **Custom CSS**: Leave blank (transparency handled in app)
+5. **Refresh browser when scene becomes active**: Optional
+
+### URL Parameters
+
+- `theme`: `dark` or `light` (default: dark)
+- `fontScale`: 0.5 to 3.0 (default: 1.0)
+- `animation`: `slide-up`, `slide-down`, `slide-left`, `slide-right`, `fade`, `zoom` (default: slide-up)
+- `safeMargin`: 0 to 100 pixels from edges (default: 24)
+
+## Twitch IRC Integration
+
+### IRC Command Usage
+
+```bash
+# Connect to specific channel
+php artisan twitch:relay --channel=channelname
+
+# Dry run mode (log only, don't store)
+php artisan twitch:relay --channel=channelname --dry-run
+```
+
+### IRC Message Flow
+
+1. **Connect**: TCP connection to `irc.chat.twitch.tv:6667`
+2. **Authenticate**: Send `PASS` (OAuth token) and `NICK` commands
+3. **Join**: `JOIN #channelname`
+4. **Parse**: Extract display name, badges, username, message from `PRIVMSG`
+5. **Store**: Persist to database and cache
+6. **Broadcast**: Fire `MessageReceived` event to Reverb
+7. **Handle PING**: Respond to `PING` with `PONG` to maintain connection
+
+### Message Processing
+
+- Use `TwitchMessageProcessor` for parsing IRC messages
+- Extract Twitch-specific metadata (badges, emotes, etc.)
+- Normalize data before storage
+- Handle reconnection with exponential backoff
+
+## Troubleshooting
+
+### Common Issues
+
+**Toasts not appearing on overlay:**
+- Verify overlay key matches `.env` setting
+- Check browser console for JavaScript errors
+- Test `/overlay/local/pending-toasts` endpoint
+- Ensure Reverb is running: `php artisan reverb:start`
+
+**Reverb connection issues:**
+- Check `BROADCAST_CONNECTION=reverb` in `.env`
+- Verify Reverb server is running
+- Check port 8080 is not blocked
+- Test WebSocket connection in browser console
+
+**IRC relay not connecting:**
+- Validate Twitch OAuth token (regenerate at https://twitchapps.com/tmi/)
+- Ensure channel name has no `#` prefix
+- Check network connectivity
+- Review logs: `storage/logs/laravel.log`
+
+**Performance issues:**
+- Monitor message throughput
+- Consider message rate limiting
+- Check cache driver performance
+- Review database queries (N+1 issues)
+
+### Debug Commands
+
+```bash
+# Check overlay events
+curl http://your-domain.test/overlay/local/pending-toasts
+
+# Test broadcast
+php artisan tinker
+>>> broadcast(new App\Events\MessageReceived($message));
+
+# View configuration
+php artisan config:show overlay
+php artisan config:show broadcasting
+
+# Tail logs
+tail -f storage/logs/laravel.log
+```
+
+## Security Considerations
+
+### Overlay Key Protection
+- **Never commit** actual overlay keys to version control
+- Use different keys per environment
+- Validate overlay key on every request to `/overlay/{key}`
+- Return 404 for invalid keys (not 403 to avoid leaking existence)
+
+### Webhook Security
+- CSRF protection disabled for webhook routes (external APIs)
+- Consider adding API key authentication for production
+- Validate all incoming webhook data
+- Rate limit webhook endpoints
+
+### Production Hardening
+- Use HTTPS in production
+- Implement rate limiting on all public routes
+- Validate and sanitize all user input
+- Monitor for abuse patterns
+- Use Redis for production cache/session driver
+
+## Code Quality Standards
+
+### Before Committing
+```bash
+# Format code with Pint
+vendor/bin/pint --dirty
+
+# Run tests
+php artisan test
+
+# Check for issues
+php artisan route:list
+php artisan config:clear
+```
+
+### Code Review Checklist
+- [ ] Follows existing naming conventions
+- [ ] Uses appropriate design patterns (Action, Store, Processor)
+- [ ] Includes tests for new functionality
+- [ ] Events properly broadcast to correct channels
+- [ ] Validates user input
+- [ ] Error handling in place
+- [ ] No hardcoded configuration (use `config()`)
+- [ ] Pint formatting applied
+
+## Deployment Considerations
+
+### Production Requirements
+- PHP 8.4+ with required extensions
+- MySQL or PostgreSQL (not SQLite)
+- Redis for cache and session driver
+- Supervisor for queue workers and Reverb
+- Web server: Nginx or Apache with proper configuration
+
+### Environment Setup
+- Set appropriate `APP_ENV=production`
+- Configure production database credentials
+- Use Redis for broadcasting and cache
+- Set up queue workers with Supervisor
+- Configure HTTPS/SSL certificates
+
+### Supervisor Configuration
+
+```ini
+[program:twitchy-reverb]
+command=php /path/to/artisan reverb:start
+autostart=true
+autorestart=true
+
+[program:twitchy-irc]
+command=php /path/to/artisan twitch:relay --channel=yourchannel
+autostart=true
+autorestart=true
+
+[program:twitchy-worker]
+command=php /path/to/artisan queue:work
+autostart=true
+autorestart=true
+```
+
+## Additional Resources
+
+### Testing URLs
+- Overlay: `http://your-domain.test/overlay/local`
+- Control Panel: `http://your-domain.test/control`
+- Home: `http://your-domain.test/`
+
+### Documentation References
+- Project guidelines: `/docs/project_guideline.md`
+- Implementation guide: `/docs/implementation-guide.md`
+- Milestone documents: `/docs/milestone-*.md`
+- Main README: `/README.md`
+
+### External Tools
+- [Twitch OAuth Token Generator](https://twitchapps.com/tmi/)
+- [OBS Studio](https://obsproject.com/)
+- [Twitch IRC Documentation](https://dev.twitch.tv/docs/irc)
+
+---
+
+## Important Notes for AI Assistants
+
+1. **Always use Actions, Stores, and Processors** - Don't bypass these patterns
+2. **Test real-time features** - Reverb broadcasting is core functionality
+3. **Maintain cache-based architecture** - Don't switch to database polling without discussion
+4. **Respect overlay transparency** - Critical for OBS integration
+5. **Follow Volt conventions** - Prefer single-file components for new Livewire components
+6. **Use Flux Pro components** - Full Pro edition is available
+7. **IRC resilience is critical** - Handle disconnections and reconnections gracefully
+8. **Security via obscurity is insufficient** - Overlay keys are basic protection, not security
+9. **Performance matters** - This runs in real-time during live streams
+10. **Documentation in `/docs`** - Comprehensive guides exist, reference them
